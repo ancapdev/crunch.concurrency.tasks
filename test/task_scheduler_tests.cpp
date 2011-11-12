@@ -127,12 +127,14 @@ BOOST_AUTO_TEST_CASE(RemoveMe)
     // int values[100] = {0,};
     Detail::SystemMutex mutex;
     auto const mainThreadId = GetThreadId();
-    Future<void> work = ParallelFor(scheduler, IndexRange(0, 10000), [&](IndexRange r){
+    Future<void> work = ParallelFor(scheduler, IndexRange(0, 10000), [&](IndexRange){
+        /*
         Detail::SystemMutex::ScopedLock lock(mutex);
         if (GetThreadId() == mainThreadId)
             std::cout << r.begin << ":" << r.end << std::endl;
         else
             std::cout << "        " << r.begin << ":" << r.end << std::endl;
+        */
 
         /*
         std::for_each(r.begin, r.end, [](int& x){
