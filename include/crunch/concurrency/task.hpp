@@ -16,6 +16,8 @@
 
 namespace Crunch { namespace Concurrency {
 
+class TaskScheduler;
+
 class TaskBase : NonCopyable
 {
 // protected: Some weirdness with access levels through lambdas on MSVC

@@ -47,7 +47,7 @@ public:
         Context(TaskScheduler& owner);
 
         template<typename F>
-        auto Add (F f) -> typename Future<typename TaskTraits<F>::ResultType>
+        auto Add (F f) -> Future<typename TaskTraits<F>::ResultType>
         {
             return Add(f, nullptr, 0);
         }
@@ -91,7 +91,7 @@ public:
     TaskScheduler();
 
     template<typename F>
-    auto Add (F f) -> typename Future<typename TaskTraits<F>::ResultType>
+    auto Add (F f) -> Future<typename TaskTraits<F>::ResultType>
     {
         if (tContext)
             return tContext->Add(f);
