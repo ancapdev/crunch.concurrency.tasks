@@ -3,8 +3,6 @@
 
 include(configure.cmake)
 
-vpm_depend(crunch.test)
-
 vpm_add_library(crunch_concurrency_tasks_lib
   include/crunch/concurrency/task.hpp
   include/crunch/concurrency/task_scheduler.hpp
@@ -14,11 +12,15 @@ vpm_add_library(crunch_concurrency_tasks_lib
 target_link_libraries(crunch_concurrency_tasks_lib
   crunch_concurrency_lib)
 
-add_executable(crunch_concurrency_tasks_test
-  test/task_scheduler_tests.cpp)
+if(NOT CRUNCH_NO_TESTS)
+  vpm_depend(crunch.test)
 
-target_link_libraries(crunch_concurrency_tasks_test
-  crunch_concurrency_tasks_lib
-  crunch_test_lib)
+  add_executable(crunch_concurrency_tasks_test
+    test/task_scheduler_tests.cpp)
 
-crunch_add_test(crunch_concurrency_tasks_test)
+  target_link_libraries(crunch_concurrency_tasks_test
+    crunch_concurrency_tasks_lib
+    crunch_test_lib)
+
+  crunch_add_test(crunch_concurrency_tasks_test)
+endif()
