@@ -6,6 +6,7 @@
 
 #include "crunch/base/align.hpp"
 #include "crunch/base/noncopyable.hpp"
+#include "crunch/base/novtable.hpp"
 #include "crunch/base/override.hpp"
 #include "crunch/base/stdint.hpp"
 
@@ -18,7 +19,7 @@ namespace Crunch { namespace Concurrency {
 
 class TaskScheduler;
 
-class TaskBase : NonCopyable
+class CRUNCH_NOVTABLE TaskBase : NonCopyable
 {
 // protected: Some weirdness with access levels through lambdas on MSVC
 public:
