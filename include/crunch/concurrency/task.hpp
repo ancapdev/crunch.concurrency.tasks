@@ -4,148 +4,89 @@
 #ifndef CRUNCH_CONCURRENCY_TASK_HPP
 #define CRUNCH_CONCURRENCY_TASK_HPP
 
-#include "crunch/base/align.hpp"
-#include "crunch/base/noncopyable.hpp"
-#include "crunch/base/novtable.hpp"
-#include "crunch/base/override.hpp"
-#include "crunch/base/stdint.hpp"
-
-#include "crunch/concurrency/waitable.hpp"
-#include "crunch/concurrency/future.hpp"
-
-#include <type_traits>
+#include "crunch/concurrency/task_scheduler.hpp"
 
 namespace Crunch { namespace Concurrency {
 
-class TaskScheduler;
-
-class CRUNCH_NOVTABLE TaskBase : NonCopyable
-{
-// protected: Some weirdness with access levels through lambdas on MSVC
-public:
-    friend class TaskScheduler;
-
-    TaskBase(TaskScheduler& owner, uint32 barrierCount, uint32 allocationSize)
-        : mOwner(owner)
-        , mBarrierCount(barrierCount, MEMORY_ORDER_RELEASE)
-        , mAllocationSize(allocationSize)
-    {}
-
-    virtual void Dispatch() = 0;
-
-    void NotifyDependencyReady();
-
-    TaskScheduler& mOwner;
-    Atomic<uint32> mBarrierCount;
-    uint32 mAllocationSize;
-};
-
-template<typename R>
-struct UnwrapResultType
-{
-    typedef R Type;
-};
-
-template<typename R>
-struct UnwrapResultType<Future<R>>
-{
-    typedef R Type;
-};
-
-template<typename F>
-struct TaskTraits
-{
-    // MSVC 10 std::result_of is broken
-    typedef decltype((*(F*)(0))()) ReturnType;
-    typedef typename UnwrapResultType<ReturnType>::Type ResultType;
-};
-
-struct ResultClassVoid {};
-struct ResultClassGeneric {};
-struct ResultClassFuture {};
-
-template<typename ResultType, typename ReturnType>
-struct ResultClass
-{
-    typedef ResultClassGeneric Type;
-};
-
-template<>
-struct ResultClass<void, void>
-{
-    typedef ResultClassVoid Type;
-};
-
-template<typename R>
-struct ResultClass<R, Future<R>>
-{
-    typedef ResultClassFuture Type;
-};
-
-template<typename F>
-class Task : public TaskBase
+// High level task primitive
+template<typename ResultType>
+class Task
 {
 public:
-    typedef typename TaskTraits<F>::ReturnType ReturnType;
-    typedef typename TaskTraits<F>::ResultType ResultType;
-    typedef Future<ResultType> FutureType;
-    typedef typename FutureType::DataType FutureDataType;
-    typedef typename FutureType::DataPtr FutureDataPtr;
-
-    // futureData must have 1 ref count already added
-    Task(TaskScheduler& owner, F&& f, FutureDataType* futureData, uint32 barrierCount, uint32 allocationSize = sizeof(Task<F>))
-        : TaskBase(owner, barrierCount, allocationSize)
-        , mFutureData(futureData) 
-        , mFunctor(std::move(f))
+    template<typename F>
+    Task(F f, TaskScheduler& scheduler = *gDefaultTaskScheduler)
+        : mScheduler(&scheduler)
+        , mFuture(scheduler.Add(f))
     {}
 
-    virtual void Dispatch() CRUNCH_OVERRIDE
+    // TODO: make private
+    Task(TaskScheduler* scheduler, Future<ResultType> future)
+        : mScheduler(scheduler)
+        , mFuture(future)
+    {}
+
+    Future<ResultType> const& GetFuture() const
     {
-        Dispatch(typename ResultClass<ResultType, ReturnType>::Type());
+        return mFuture;
+    }
+
+    template<typename F>
+    auto Then(F f) -> Task<typename ResultOfTask<F(ResultType)>::Type>
+    {
+        IWaitable* dep = &mFuture;
+        Future<ResultType> result = mFuture;
+        Future<typename ResultOfTask<F(ResultType)>::Type> thenFuture = mScheduler->Add([=]{ return f(result.Get()); }, &dep, 1);
+        return Task<typename ResultOfTask<F(ResultType)>::Type>(mScheduler, thenFuture);
     }
 
 private:
-    void Dispatch(ResultClassGeneric)
-    {
-        auto result = mFunctor();
-        mFutureData->Set(result);
-        Release(mFutureData);
-        delete this;
-    }
-
-    void Dispatch(ResultClassVoid)
-    {
-        mFunctor();
-        mFutureData->Set();
-        Release(mFutureData);
-        delete this;
-    }
-
-    void Dispatch(ResultClassFuture);
-
-    // typedef typename std::aligned_storage<sizeof(F), std::alignment_of<F>::value>::type FunctorStorageType;
-
-    FutureDataType* mFutureData;
-    F mFunctor;
-    // FunctorStorageType mFunctorStorage;
+    TaskScheduler* mScheduler;
+    Future<ResultType> mFuture;
 };
 
-/*
-// For use when the continuation doesn't fit in the original tasks allocation
-template<typename F, typename R>
-class ContinuationImpl : public Task
+template<>
+class Task<void>
 {
-    static void Dispatch(Task* task)
+public:
+    template<typename F>
+    Task(F f, TaskScheduler& scheduler = *gDefaultTaskScheduler)
+        : mScheduler(&scheduler)
+        , mFuture(scheduler.Add(f))
+    {}
+
+    Task(TaskScheduler* scheduler, Future<void> future)
+        : mScheduler(scheduler)
+        , mFuture(future)
+    {}
+
+    Future<void> GetFuture() const
     {
-        // Must delete the task because it's not part of the FutureData allocation
+        return mFuture;
     }
 
-    typedef typename std::aligned_storage<sizeof(F), std::alignment_of<F>::value>::type FunctorStorageType;
+    template<typename F>
+    auto Then(F f) -> Task<typename ResultOfTask<F>::Type>
+    {
+        IWaitable* dep = &mFuture;
+        return Task<typename ResultOfTask<F>::Type>(mScheduler, mScheduler->Add(f, &dep, 1));
+    }
 
-    Detail::FutureData<R>* mFutureData;
-    FunctorStorageType mFunctorStorage;
+private:
+    TaskScheduler* mScheduler;
+    Future<void> mFuture;
 };
-*/
+
+template<typename F>
+auto RunTask(F f) -> Task<typename ResultOfTask<F>::Type>
+{
+    return Task<typename ResultOfTask<F>::Type>(f);
+}
+
+template<typename R, typename F>
+auto operator >> (Task<R> t, F f) -> decltype(t.Then(f))
+{
+    return t.Then(f);
+}
 
 }}
 

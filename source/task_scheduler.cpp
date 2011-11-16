@@ -4,33 +4,35 @@
 #include "crunch/concurrency/task_scheduler.hpp"
 
 namespace Crunch { namespace Concurrency {
+ 
+TaskScheduler* gDefaultTaskScheduler = nullptr;
 
-void WorkStealingTaskQueue::PushBack(TaskBase* task)
+void WorkStealingTaskQueue::PushBack(ScheduledTaskBase* task)
 {
     Detail::SystemMutex::ScopedLock lock(mMutex);
     mTasks.push_back(task);
 }
 
-TaskBase* WorkStealingTaskQueue::PopBack()
+ScheduledTaskBase* WorkStealingTaskQueue::PopBack()
 {
     Detail::SystemMutex::ScopedLock lock(mMutex);
 
     if (mTasks.empty())
         return nullptr;
 
-    TaskBase* task = mTasks.back();
+    ScheduledTaskBase* task = mTasks.back();
     mTasks.pop_back();
     return task;
 }
 
-TaskBase* WorkStealingTaskQueue::StealFront()
+ScheduledTaskBase* WorkStealingTaskQueue::StealFront()
 {
     Detail::SystemMutex::ScopedLock lock(mMutex);
 
     if (mTasks.empty())
         return nullptr;
 
-    TaskBase* task = mTasks.front();
+    ScheduledTaskBase* task = mTasks.front();
     mTasks.pop_front();
     return task;
 }
@@ -93,7 +95,7 @@ void TaskScheduler::Context::RunAll()
 {
     for (;;)
     {
-        while (TaskBase* task = mTasks.PopBack())
+        while (ScheduledTaskBase* task = mTasks.PopBack())
             task->Dispatch();
 
         if (mConfigurationVersion != mOwner.mConfigurationVersion)
@@ -106,7 +108,7 @@ void TaskScheduler::Context::RunAll()
         bool stole = false;
         for (auto it = mNeighbours.begin(), end = mNeighbours.end(); it != end; ++it)
         {
-            if (TaskBase* task = (*it)->mTasks.StealFront())
+            if (ScheduledTaskBase* task = (*it)->mTasks.StealFront())
             {
                 task->Dispatch();
                 stole = true;
@@ -125,7 +127,7 @@ void TaskScheduler::Context::RunUntil(IWaitable& waitable)
     waitable.AddWaiter([&] { done = true; });
     while (!done)
     {
-        while (TaskBase* task = mTasks.PopBack())
+        while (ScheduledTaskBase* task = mTasks.PopBack())
             task->Dispatch();
 
         if (mConfigurationVersion != mOwner.mConfigurationVersion)
@@ -138,7 +140,7 @@ void TaskScheduler::Context::RunUntil(IWaitable& waitable)
         bool stole = false;
         for (auto it = mNeighbours.begin(), end = mNeighbours.end(); it != end; ++it)
         {
-            if (TaskBase* task = (*it)->mTasks.StealFront())
+            if (ScheduledTaskBase* task = (*it)->mTasks.StealFront())
             {
                 task->Dispatch();
                 stole = true;

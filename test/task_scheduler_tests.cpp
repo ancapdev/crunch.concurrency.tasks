@@ -2,6 +2,7 @@
 // Distributed under the Simplified BSD License (See accompanying file LICENSE.txt)
 
 #include "crunch/concurrency/meta_scheduler.hpp"
+#include "crunch/concurrency/task.hpp"
 #include "crunch/concurrency/task_scheduler.hpp"
 #include "crunch/concurrency/thread.hpp"
 #include "crunch/containers/small_vector.hpp"
@@ -148,6 +149,34 @@ BOOST_AUTO_TEST_CASE(RemoveMe)
     shutdownEvent.Set();
     WaitFor(workerDoneEvent);
 
+    metaSchedulerContext.Release();
+}
+
+BOOST_AUTO_TEST_CASE(RemoveMe2)
+{
+    MetaScheduler::Configuration configuration;
+    MetaScheduler metaScheduler(configuration);
+    MetaScheduler::Context& metaSchedulerContext = metaScheduler.AcquireContext();
+    TaskScheduler scheduler;
+    // TODO: pass flag to TaskScheduler constructor to say if it should become the global default scheduler
+    gDefaultTaskScheduler = &scheduler;
+    scheduler.Enter();
+
+    RunTask([] {
+        std::cout << "In task" << std::endl;
+    }).Then([] {
+        std::cout << "In next task" << std::endl;
+    });
+
+    auto a = RunTask([] { return 1; });
+    auto b = a >> [] (int x) { return x * 2; };
+    auto c = b >> [] (int x) { return x * x; };
+    auto d = c >> [] (int x) { return x + 1; };
+    auto e = d >> [] (int x) { std::cout << "Produced " << x << std::endl; };
+
+    scheduler.Run();
+
+    scheduler.Leave();
     metaSchedulerContext.Release();
 }
 
