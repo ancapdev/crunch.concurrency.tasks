@@ -166,7 +166,9 @@ public:
     };
 
     WorkStealingQueue(uint32 initialLogSize = 6)
-        : mArray(CircularArray::Create(initialLogSize))
+        : mFront(0)
+        , mBack(0)
+        , mArray(CircularArray::Create(initialLogSize))
     {}
 
     ~WorkStealingQueue()
