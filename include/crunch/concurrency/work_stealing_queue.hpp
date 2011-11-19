@@ -48,17 +48,17 @@ public:
     public:
         static CircularArray* Create(uint32 logSize)
         {
-            return new (Allocate(logSize)) CircularArray(logSize);
+            return new (sAllocator.Allocate(logSize)) CircularArray(logSize);
         }
 
         void Destroy()
         {
-            Free(this, mLogSize);
+            sAllocator.Free(this, mLogSize);
         }
 
         CircularArray* Grow(int64 front, int64 back)
         {
-            CircularArray* newArray = new (Allocate(mLogSize + 1)) CircularArray(this);
+            CircularArray* newArray = new (sAllocator.Allocate(mLogSize + 1)) CircularArray(this);
 
             for (int64 i = front; i < back; ++i)
                 newArray->Set(i, Get(i));
@@ -106,8 +106,6 @@ public:
         }
 
     private:
-        typedef Detail::WorkStealingQueueFreeListNode Node;
-
         CircularArray(uint32 logSize)
             : mParent(nullptr)
             , mLogSize(logSize)
@@ -125,37 +123,60 @@ public:
         int64 mSizeMinusOne;
         T* mElements[1]; // Actually dynamically sized
 
-        static void* Allocate(uint32 logSize)
+        struct CRUNCH_ALIGN_PREFIX(128) Allocator
         {
-            CRUNCH_ASSERT(logSize <= MaxLogSize);
+            typedef Detail::WorkStealingQueueFreeListNode Node;
 
-            if (Node* node = sFreeLists[logSize].Pop())
-                return node;
+            ~Allocator()
+            {
+                for (uint32 i = 0; i < MaxLogSize; ++i)
+                    while (Node* node = mFreeLists[i].Pop())
+                        FreeAligned(node);
+            }
 
-            // TODO: grow free list in batches
-            return MallocAligned((std::size_t(1) << logSize) + sizeof(CircularArray), 128);
-        }
+            void* Allocate(uint32 logSize)
+            {
+                CRUNCH_ASSERT(logSize <= MaxLogSize);
 
-        static void Free(void* buffer, uint32 logSize)
-        {
-            CRUNCH_ASSERT(logSize <= MaxLogSize);
+                if (Node* node = mFreeLists[logSize].Pop())
+                    return node;
 
-            sFreeLists[logSize].Push(reinterpret_cast<Node*>(buffer));
-        }
+                // TODO: grow free list in batches
+                return MallocAligned((std::size_t(1) << logSize) + sizeof(CircularArray), 128);
+            }
 
-        // Support logSize <= 32
-        static uint32 const MaxLogSize = 32;
+            void Free(void* buffer, uint32 logSize)
+            {
+                CRUNCH_ASSERT(logSize <= MaxLogSize);
 
-        // Align to cacheline size. 64 should be sufficient on newer x86, but other archs often have larger line sizes
-        // Some levels might also use larger lines
-        typedef CRUNCH_ALIGN_PREFIX(128) MPMCLifoList<Node> CRUNCH_ALIGN_POSTFIX(128) FreeList;
+                mFreeLists[logSize].Push(reinterpret_cast<Node*>(buffer));
+            }
 
-        static FreeList sFreeLists[MaxLogSize];
+            // Support logSize <= 32
+            static uint32 const MaxLogSize = 32;
+
+            // Align to cacheline size. 64 should be sufficient on newer x86, but other archs often have larger line sizes
+            // Some levels might also use larger lines
+            typedef CRUNCH_ALIGN_PREFIX(128) MPMCLifoList<Node> CRUNCH_ALIGN_POSTFIX(128) FreeList;
+
+            FreeList mFreeLists[MaxLogSize];
+        } CRUNCH_ALIGN_POSTFIX(128);
+
+        static Allocator sAllocator;
     };
 
     WorkStealingQueue(uint32 initialLogSize = 6)
         : mArray(CircularArray::Create(initialLogSize))
     {}
+
+    ~WorkStealingQueue()
+    {
+        // Unwind chain of arrays and destroy them all
+        CircularArray* array = mArray;
+        while (array->CanShrink())
+            array = array->Shrink(0, 0);
+        array->Destroy();
+    }
 
     // TODO: avoid front access in Push. Cache conservative front
     void Push(T* value)
@@ -249,7 +270,7 @@ private:
 };
 
 template<typename T>
-typename WorkStealingQueue<T>::CircularArray::FreeList WorkStealingQueue<T>::CircularArray::sFreeLists[WorkStealingQueue<T>::CircularArray::MaxLogSize];
+typename WorkStealingQueue<T>::CircularArray::Allocator WorkStealingQueue<T>::CircularArray::sAllocator;
 
 }}
 
