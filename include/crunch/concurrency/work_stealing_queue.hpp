@@ -36,6 +36,7 @@ namespace Detail
 }
 
 // Implementation of Chase and Lev "Dynamic Circular Work-Stealing Deque"
+// TODO: Make signed types unsigned (if negative binary & will not work for modulo)
 template<typename T>
 class WorkStealingQueue : NonCopyable
 {
