@@ -168,11 +168,25 @@ BOOST_AUTO_TEST_CASE(RemoveMe2)
         std::cout << "In next task" << std::endl;
     });
 
+    // TODO: Reserve operator overloading for a special wrapper object (TaskStream) to avoid confusion
+    //   - Have operators for combining multiple results to one continuation. E.g., ','
+    //   - Have operator to split same result to multiple continuations?
+    //     - Maybe group of tasks can all take same input from their shared dependencies.
+    /*
+    // Example: Would create a Future<void> that prints 1, 2, 3
+    TaskStream()
+        >> ([] { return 1; }, [] { return 2 }, [] { return 3; })
+        >> [] (int a, int b, int c) { std::cout << a << ", " << b << ", " << c << std::endl; };
+    */
+
+
     auto a = RunTask([] { return 1; });
     auto b = a >> [] (int x) { return x * 2; };
     auto c = b >> [] (int x) { return x * x; };
     auto d = c >> [] (int x) { return x + 1; };
     auto e = d >> [] (int x) { std::cout << "Produced " << x << std::endl; };
+
+
 
     scheduler.Run();
 
