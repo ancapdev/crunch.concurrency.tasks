@@ -225,8 +225,19 @@ public:
 
             if (dependencyCount > 0)
             {
+                uint32 addedCount = 0;
                 for (uint32 i = 0; i < dependencyCount; ++i)
-                    dependencies[i]->AddWaiter([=] { task->NotifyDependencyReady(); });
+                    if (dependencies[i]->AddWaiter([=] { task->NotifyDependencyReady(); }))
+                        addedCount++;
+
+                if (addedCount < dependencyCount)
+                {
+                    if (addedCount == 0)
+                        mTasks.PushBack(task);
+                    else
+                        if (task->mBarrierCount.Sub(dependencyCount - addedCount) == 1)
+                            mTasks.PushBack(task);
+                }
             }
             else
             {
@@ -337,7 +348,8 @@ void ScheduledTask<F>::Dispatch(ResultClassFuture)
         contTask = new ContTaskType(owner, std::move(contFunc), futureData, 1);
     }
 
-    result.AddWaiter([=] { contTask->NotifyDependencyReady(); });
+    if (!result.AddWaiter([=] { contTask->NotifyDependencyReady(); }))
+        contTask->NotifyDependencyReady();
 }
 
 }}

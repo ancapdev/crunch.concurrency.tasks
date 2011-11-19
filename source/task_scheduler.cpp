@@ -124,7 +124,8 @@ void TaskScheduler::Context::RunAll()
 void TaskScheduler::Context::RunUntil(IWaitable& waitable)
 {
     volatile bool done = false;
-    waitable.AddWaiter([&] { done = true; });
+    if (!waitable.AddWaiter([&] { done = true; }))
+        done = true;
     while (!done)
     {
         while (ScheduledTaskBase* task = mTasks.PopBack())
