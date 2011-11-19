@@ -61,14 +61,23 @@ public:
             CircularArray* newArray = new (Allocate(mLogSize + 1)) CircularArray(this);
 
             for (int64 i = front; i < back; ++i)
-                newArray->Set(Get(i));
+                newArray->Set(i, Get(i));
 
             return newArray;
         }
 
         CircularArray* Shrink(int64 front, int64 back)
         {
-            throw std::runtime_error("Not implemented");
+            CRUNCH_ASSERT(CanShrink());
+            CRUNCH_ASSERT((back - front) < GetSize() / 2);
+
+            // TODO: Set watermark and only copy parts that have changed since grow
+
+            CircularArray* newArray = mParent;
+            for (int64 i = front; i < back; ++i)
+                newArray->Set(i, Get(i));
+
+            return newArray;
         }
 
         bool CanShrink() const
@@ -78,20 +87,20 @@ public:
 
         void Set(int64 index, T* value)
         {
-            mBuffer[index & mSizeMinusOne] = value;
+            mElements[index & mSizeMinusOne] = value;
         }
 
         T* Get(int64 index) const
         {
-            return mBuffer[index & mSizeMinusOne];
+            return mElements[index & mSizeMinusOne];
         }
 
-        std::size_t GetSize() const
+        int64 GetSize() const
         {
             return mSizeMinusOne + 1;
         }
 
-        std::size_t GetSizeMinusOne() const
+        int64 GetSizeMinusOne() const
         {
             return mSizeMinusOne;
         }
@@ -155,7 +164,7 @@ public:
         int64 const front = mFront.Load(MEMORY_ORDER_ACQUIRE);
         CircularArray* array = mArray.Load(MEMORY_ORDER_ACQUIRE);
         int64 const size = back - front;
-        if (size >= mArray.mSizeMinusOne)
+        if (size >= array->GetSizeMinusOne())
         {
             array = array->Grow(front, back);
             mArray.Store(array, MEMORY_ORDER_RELEASE);

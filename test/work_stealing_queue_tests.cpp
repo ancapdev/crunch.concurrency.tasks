@@ -12,6 +12,11 @@ BOOST_AUTO_TEST_CASE(Test)
 {
     WorkStealingQueue<int> queue;
 
+    int values[10];
+    queue.Push(values);
+    BOOST_CHECK_EQUAL(queue.Pop(), values);
+    BOOST_CHECK_EQUAL(queue.Pop(), (int*)0);
+
 }
 
 BOOST_AUTO_TEST_SUITE_END()
