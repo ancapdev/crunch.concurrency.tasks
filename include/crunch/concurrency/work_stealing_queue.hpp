@@ -143,7 +143,7 @@ public:
                     return node;
 
                 // TODO: grow free list in batches
-                return MallocAligned((std::size_t(1) << logSize) + sizeof(CircularArray), 128);
+                return MallocAligned((sizeof(T*) << logSize) + sizeof(CircularArray), 128);
             }
 
             void Free(void* buffer, uint32 logSize)
