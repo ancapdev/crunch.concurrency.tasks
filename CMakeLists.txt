@@ -26,3 +26,16 @@ if(NOT CRUNCH_NO_TESTS)
 
   crunch_add_test(crunch_concurrency_tasks_test)
 endif()
+
+if(NOT CRUNCH_NO_BENCHMARKS)
+  vpm_depend(crunch.benchmarking)
+
+  add_executable(crunch_concurrency_tasks_benchmark
+    benchmark/work_stealing_queue_benchmarks.cpp)
+
+  target_link_libraries(crunch_concurrency_tasks_benchmark
+    crunch_benchmarking_lib
+    crunch_concurrency_tasks_lib)
+
+  crunch_add_benchmark(crunch_concurrency_tasks_benchmark)
+endif()
