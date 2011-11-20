@@ -13,7 +13,7 @@
 #include "crunch/concurrency/future.hpp"
 #include "crunch/concurrency/thread_local.hpp"
 #include "crunch/concurrency/waitable.hpp"
-#include "crunch/concurrency/future.hpp"
+#include "crunch/concurrency/work_stealing_queue.hpp"
 
 
 // TODO: remove
@@ -181,20 +181,6 @@ class ContinuationImpl : public ScheduledTask
 };
 */
 
-
-class WorkStealingTaskQueue
-{
-public:
-    void PushBack(ScheduledTaskBase* task);
-    ScheduledTaskBase* PopBack();
-    ScheduledTaskBase* StealFront();
-
-private:
-    // TODO: Implement proper WS queue
-    Detail::SystemMutex mMutex;
-    std::deque<ScheduledTaskBase*> mTasks;
-};
-
 // TODO: store continuation size hint thread local per F type 
 //       would enable over-allocation on initial task to avoid further allocations for continuations
 //       only necessary when return type is void or Future<T>, i.e., continuable
@@ -233,15 +219,15 @@ public:
                 if (addedCount < dependencyCount)
                 {
                     if (addedCount == 0)
-                        mTasks.PushBack(task);
+                        mTasks.Push(task);
                     else
                         if (task->mBarrierCount.Sub(dependencyCount - addedCount) == 1)
-                            mTasks.PushBack(task);
+                            mTasks.Push(task);
                 }
             }
             else
             {
-                mTasks.PushBack(task);
+                mTasks.Push(task);
             }
 
             return FutureType(FutureDataPtr(futureData, false));
@@ -252,6 +238,8 @@ public:
         void RunUntil(IWaitable& waitable);
 
     private:
+        typedef WorkStealingQueue<ScheduledTaskBase> WorkStealingTaskQueue;
+
         friend class TaskScheduler;
 
         TaskScheduler& mOwner;
@@ -308,9 +296,9 @@ extern TaskScheduler* gDefaultTaskScheduler;
 inline void TaskScheduler::AddTask(ScheduledTaskBase* task)
 {
     if (tContext && &tContext->mOwner == this)
-        tContext->mTasks.PushBack(task);
+        tContext->mTasks.Push(task);
     else
-        mSharedContext.mTasks.PushBack(task);
+        mSharedContext.mTasks.Push(task);
 }
 
 inline void ScheduledTaskBase::NotifyDependencyReady()

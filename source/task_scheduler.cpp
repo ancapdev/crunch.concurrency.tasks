@@ -7,37 +7,6 @@ namespace Crunch { namespace Concurrency {
  
 TaskScheduler* gDefaultTaskScheduler = nullptr;
 
-void WorkStealingTaskQueue::PushBack(ScheduledTaskBase* task)
-{
-    Detail::SystemMutex::ScopedLock lock(mMutex);
-    mTasks.push_back(task);
-}
-
-ScheduledTaskBase* WorkStealingTaskQueue::PopBack()
-{
-    Detail::SystemMutex::ScopedLock lock(mMutex);
-
-    if (mTasks.empty())
-        return nullptr;
-
-    ScheduledTaskBase* task = mTasks.back();
-    mTasks.pop_back();
-    return task;
-}
-
-ScheduledTaskBase* WorkStealingTaskQueue::StealFront()
-{
-    Detail::SystemMutex::ScopedLock lock(mMutex);
-
-    if (mTasks.empty())
-        return nullptr;
-
-    ScheduledTaskBase* task = mTasks.front();
-    mTasks.pop_front();
-    return task;
-}
-
-
 CRUNCH_THREAD_LOCAL TaskScheduler::Context* TaskScheduler::tContext = nullptr;
 
 #if defined (CRUNCH_COMPILER_MSVC)
@@ -95,7 +64,7 @@ void TaskScheduler::Context::RunAll()
 {
     for (;;)
     {
-        while (ScheduledTaskBase* task = mTasks.PopBack())
+        while (ScheduledTaskBase* task = mTasks.Pop())
             task->Dispatch();
 
         if (mConfigurationVersion != mOwner.mConfigurationVersion)
@@ -108,7 +77,7 @@ void TaskScheduler::Context::RunAll()
         bool stole = false;
         for (auto it = mNeighbours.begin(), end = mNeighbours.end(); it != end; ++it)
         {
-            if (ScheduledTaskBase* task = (*it)->mTasks.StealFront())
+            if (ScheduledTaskBase* task = (*it)->mTasks.Steal())
             {
                 task->Dispatch();
                 stole = true;
@@ -128,7 +97,7 @@ void TaskScheduler::Context::RunUntil(IWaitable& waitable)
         done = true;
     while (!done)
     {
-        while (ScheduledTaskBase* task = mTasks.PopBack())
+        while (ScheduledTaskBase* task = mTasks.Pop())
             task->Dispatch();
 
         if (mConfigurationVersion != mOwner.mConfigurationVersion)
@@ -141,7 +110,7 @@ void TaskScheduler::Context::RunUntil(IWaitable& waitable)
         bool stole = false;
         for (auto it = mNeighbours.begin(), end = mNeighbours.end(); it != end; ++it)
         {
-            if (ScheduledTaskBase* task = (*it)->mTasks.StealFront())
+            if (ScheduledTaskBase* task = (*it)->mTasks.Steal())
             {
                 task->Dispatch();
                 stole = true;
