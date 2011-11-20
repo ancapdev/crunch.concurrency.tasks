@@ -5,6 +5,7 @@
 #define CRUNCH_CONCURRENCY_WORK_STEALING_QUEUE_HPP
 
 #include "crunch/base/align.hpp"
+#include "crunch/base/inline.hpp"
 #include "crunch/base/noncopyable.hpp"
 #include "crunch/base/memory.hpp"
 #include "crunch/base/stdint.hpp"
@@ -182,7 +183,7 @@ public:
     }
 
     // TODO: avoid front access in Push. Cache conservative front
-    void Push(T* value)
+    CRUNCH_ALWAYS_INLINE void Push(T* value)
     {
         int64 const back = mBack.Load(MEMORY_ORDER_ACQUIRE);
         int64 const front = mFront.Load(MEMORY_ORDER_ACQUIRE);
@@ -200,7 +201,7 @@ public:
     // Fraction of spaced used to trigger shrink. Must be >= 3.
     static uint32 const ShrinkFraction = 3;
 
-    T* Pop()
+    CRUNCH_ALWAYS_INLINE T* Pop()
     {
         int64 back = mBack.Load(MEMORY_ORDER_ACQUIRE);
         CircularArray* array = mArray.Load(MEMORY_ORDER_ACQUIRE);
