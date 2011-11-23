@@ -8,9 +8,10 @@
 #include "crunch/base/inline.hpp"
 #include "crunch/base/noncopyable.hpp"
 #include "crunch/base/memory.hpp"
-#include "crunch/base/stdint.hpp"
 #include "crunch/concurrency/atomic.hpp"
 #include "crunch/concurrency/mpmc_lifo_list.hpp"
+
+#include <cstdint>
 
 namespace Crunch { namespace Concurrency {
 
@@ -48,7 +49,7 @@ public:
     class CircularArray : NonCopyable
     {
     public:
-        static CircularArray* Create(uint32 logSize)
+        static CircularArray* Create(std::uint32_t logSize)
         {
             return new (sAllocator.Allocate(logSize)) CircularArray(logSize);
         }
@@ -58,17 +59,17 @@ public:
             sAllocator.Free(this, mLogSize);
         }
 
-        CircularArray* Grow(int64 front, int64 back)
+        CircularArray* Grow(std::int64_t front, std::int64_t back)
         {
             CircularArray* newArray = new (sAllocator.Allocate(mLogSize + 1)) CircularArray(this);
 
-            for (int64 i = front; i < back; ++i)
+            for (std::int64_t i = front; i < back; ++i)
                 newArray->Set(i, Get(i));
 
             return newArray;
         }
 
-        CircularArray* Shrink(int64 front, int64 back)
+        CircularArray* Shrink(std::int64_t front, std::int64_t back)
         {
             CRUNCH_ASSERT(CanShrink());
             CRUNCH_ASSERT((back - front) < GetSize() / 2);
@@ -76,7 +77,7 @@ public:
             // TODO: Set watermark and only copy parts that have changed since grow
 
             CircularArray* newArray = mParent;
-            for (int64 i = front; i < back; ++i)
+            for (std::int64_t i = front; i < back; ++i)
                 newArray->Set(i, Get(i));
 
             return newArray;
@@ -87,28 +88,28 @@ public:
             return mParent != nullptr;
         }
 
-        void Set(int64 index, T* value)
+        void Set(std::int64_t index, T* value)
         {
             mElements[index & mSizeMinusOne] = value;
         }
 
-        T* Get(int64 index) const
+        T* Get(std::int64_t index) const
         {
             return mElements[index & mSizeMinusOne];
         }
 
-        int64 GetSize() const
+        std::int64_t GetSize() const
         {
             return mSizeMinusOne + 1;
         }
 
-        int64 GetSizeMinusOne() const
+        std::int64_t GetSizeMinusOne() const
         {
             return mSizeMinusOne;
         }
 
     private:
-        CircularArray(uint32 logSize)
+        CircularArray(std::uint32_t logSize)
             : mParent(nullptr)
             , mLogSize(logSize)
             , mSizeMinusOne((1ll << logSize) - 1)
@@ -121,8 +122,8 @@ public:
         {}
 
         CircularArray* mParent;
-        uint32 mLogSize;
-        int64 mSizeMinusOne;
+        std::uint32_t mLogSize;
+        std::int64_t mSizeMinusOne;
         T* mElements[1]; // Actually dynamically sized
 
         struct CRUNCH_ALIGN_PREFIX(128) Allocator
@@ -131,12 +132,12 @@ public:
 
             ~Allocator()
             {
-                for (uint32 i = 0; i < MaxLogSize; ++i)
+                for (std::uint32_t i = 0; i < MaxLogSize; ++i)
                     while (Node* node = mFreeLists[i].Pop())
                         FreeAligned(node);
             }
 
-            void* Allocate(uint32 logSize)
+            void* Allocate(std::uint32_t logSize)
             {
                 CRUNCH_ASSERT(logSize <= MaxLogSize);
 
@@ -147,7 +148,7 @@ public:
                 return MallocAligned((sizeof(T*) << logSize) + sizeof(CircularArray), 128);
             }
 
-            void Free(void* buffer, uint32 logSize)
+            void Free(void* buffer, std::uint32_t logSize)
             {
                 CRUNCH_ASSERT(logSize <= MaxLogSize);
 
@@ -155,7 +156,7 @@ public:
             }
 
             // Support logSize <= 32
-            static uint32 const MaxLogSize = 32;
+            static std::uint32_t const MaxLogSize = 32;
 
             // Align to cacheline size. 64 should be sufficient on newer x86, but other archs often have larger line sizes
             // Some levels might also use larger lines
@@ -167,7 +168,7 @@ public:
         static Allocator sAllocator;
     };
 
-    WorkStealingQueue(uint32 initialLogSize = 6)
+    WorkStealingQueue(std::uint32_t initialLogSize = 6)
         : mFront(0)
         , mBack(0)
         , mArray(CircularArray::Create(initialLogSize))
@@ -185,10 +186,10 @@ public:
     // TODO: avoid front access in Push. Cache conservative front
     CRUNCH_ALWAYS_INLINE void Push(T* value)
     {
-        int64 const back = mBack.Load(MEMORY_ORDER_ACQUIRE);
-        int64 const front = mFront.Load(MEMORY_ORDER_ACQUIRE);
+        std::int64_t const back = mBack.Load(MEMORY_ORDER_ACQUIRE);
+        std::int64_t const front = mFront.Load(MEMORY_ORDER_ACQUIRE);
         CircularArray* array = mArray.Load(MEMORY_ORDER_ACQUIRE);
-        int64 const size = back - front;
+        std::int64_t const size = back - front;
         if (size >= array->GetSizeMinusOne())
         {
             array = array->Grow(front, back);
@@ -199,16 +200,16 @@ public:
     }
 
     // Fraction of spaced used to trigger shrink. Must be >= 3.
-    static uint32 const ShrinkFraction = 3;
+    static std::uint32_t const ShrinkFraction = 3;
 
     CRUNCH_ALWAYS_INLINE T* Pop()
     {
-        int64 back = mBack.Load(MEMORY_ORDER_ACQUIRE);
+        std::int64_t back = mBack.Load(MEMORY_ORDER_ACQUIRE);
         CircularArray* array = mArray.Load(MEMORY_ORDER_ACQUIRE);
         back = back - 1;
         mBack.Store(back, MEMORY_ORDER_RELEASE);
-        int64 front = mFront.Load(MEMORY_ORDER_ACQUIRE);
-        int64 const size = back - front;
+        std::int64_t front = mFront.Load(MEMORY_ORDER_ACQUIRE);
+        std::int64_t const size = back - front;
         if (size < 0)
         {
             mBack.Store(front, MEMORY_ORDER_RELEASE);
@@ -224,9 +225,9 @@ public:
             {
                 CircularArray* newArray = array->Shrink(front, back);
                 mArray.Store(newArray, MEMORY_ORDER_RELEASE);
-                int64 const newSize = newArray->GetSize();
+                std::int64_t const newSize = newArray->GetSize();
                 mBack.Store(back + newSize, MEMORY_ORDER_RELEASE);
-                int64 front = mFront.Load(MEMORY_ORDER_ACQUIRE);
+                std::int64_t front = mFront.Load(MEMORY_ORDER_ACQUIRE);
                 if (!mFront.CompareAndSwap(front + newSize, front))
                     mBack.Store(back);
 
@@ -244,11 +245,11 @@ public:
     // TODO: differentiate empty and failed to steal?
     T* Steal()
     {
-        int64 front = mFront.Load(MEMORY_ORDER_ACQUIRE);
+        std::int64_t front = mFront.Load(MEMORY_ORDER_ACQUIRE);
         CircularArray* oldArray = mArray.Load(MEMORY_ORDER_ACQUIRE);
-        int64 const back = mBack.Load(MEMORY_ORDER_ACQUIRE);
+        std::int64_t const back = mBack.Load(MEMORY_ORDER_ACQUIRE);
         CircularArray* array = mArray.Load(MEMORY_ORDER_ACQUIRE);
-        int64 const size = back - front;
+        std::int64_t const size = back - front;
         if (size <= 0)
             return nullptr; // Empty
         if ((size & array->GetSizeMinusOne()) == 0)
@@ -268,8 +269,8 @@ public:
 private:
     void Grow();
 
-    Atomic<int64> mFront;
-    Atomic<int64> mBack;
+    Atomic<std::int64_t> mFront;
+    Atomic<std::int64_t> mBack;
     Atomic<CircularArray*> mArray;
 };
 

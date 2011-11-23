@@ -9,7 +9,6 @@
 #include "crunch/base/novtable.hpp"
 #include "crunch/base/override.hpp"
 #include "crunch/base/result_of.hpp"
-#include "crunch/base/stdint.hpp"
 #include "crunch/concurrency/future.hpp"
 #include "crunch/concurrency/thread_local.hpp"
 #include "crunch/concurrency/waitable.hpp"
@@ -19,6 +18,7 @@
 // TODO: remove
 #include "crunch/concurrency/detail/system_mutex.hpp"
 
+#include <cstdint>
 #include <deque>
 #include <functional>
 #include <memory>
@@ -79,7 +79,7 @@ class CRUNCH_NOVTABLE ScheduledTaskBase : NonCopyable
 public:
     friend class TaskScheduler;
 
-    ScheduledTaskBase(TaskScheduler& owner, uint32 barrierCount, uint32 allocationSize)
+    ScheduledTaskBase(TaskScheduler& owner, std::uint32_t barrierCount, std::uint32_t allocationSize)
         : mOwner(owner)
         , mBarrierCount(barrierCount, MEMORY_ORDER_RELEASE)
         , mAllocationSize(allocationSize)
@@ -90,8 +90,8 @@ public:
     void NotifyDependencyReady();
 
     TaskScheduler& mOwner;
-    Atomic<uint32> mBarrierCount;
-    uint32 mAllocationSize;
+    Atomic<std::uint32_t> mBarrierCount;
+    std::uint32_t mAllocationSize;
 };
 
 struct ResultClassVoid {};
@@ -127,7 +127,7 @@ public:
     typedef typename FutureType::DataPtr FutureDataPtr;
 
     // futureData must have 1 ref count already added
-    ScheduledTask(TaskScheduler& owner, F&& f, FutureDataType* futureData, uint32 barrierCount, uint32 allocationSize = sizeof(ScheduledTask<F>))
+    ScheduledTask(TaskScheduler& owner, F&& f, FutureDataType* futureData, std::uint32_t barrierCount, std::uint32_t allocationSize = sizeof(ScheduledTask<F>))
         : ScheduledTaskBase(owner, barrierCount, allocationSize)
         , mFutureData(futureData) 
         , mFunctor(std::move(f))
@@ -200,7 +200,7 @@ public:
         }
 
         template<typename F>
-        auto Add (F f, IWaitable** dependencies, uint32 dependencyCount) -> Future<typename ResultOfTask<F>::Type>
+        auto Add (F f, IWaitable** dependencies, std::uint32_t dependencyCount) -> Future<typename ResultOfTask<F>::Type>
         {
             typedef Future<typename ResultOfTask<F>::Type> FutureType;
             typedef typename FutureType::DataType FutureDataType;
@@ -211,8 +211,8 @@ public:
 
             if (dependencyCount > 0)
             {
-                uint32 addedCount = 0;
-                for (uint32 i = 0; i < dependencyCount; ++i)
+                std::uint32_t addedCount = 0;
+                for (std::uint32_t i = 0; i < dependencyCount; ++i)
                     if (dependencies[i]->AddWaiter([=] { task->NotifyDependencyReady(); }))
                         addedCount++;
 
@@ -260,7 +260,7 @@ public:
     }
 
     template<typename F>
-    auto Add (F f, IWaitable** dependencies, uint32 dependencyCount) -> Future<typename ResultOfTask<F>::Type>
+    auto Add (F f, IWaitable** dependencies, std::uint32_t dependencyCount) -> Future<typename ResultOfTask<F>::Type>
     {
         if (tContext)
             return tContext->Add(f, dependencies, dependencyCount);
@@ -314,7 +314,7 @@ void ScheduledTask<F>::Dispatch(ResultClassFuture)
 
     // Create continuation dependent on the completion of the returned Future
     auto futureData = mFutureData;
-    uint32 const allocSize = mAllocationSize;
+    std::uint32_t const allocSize = mAllocationSize;
     TaskScheduler& owner = mOwner;
 
     // Get value from result

@@ -47,7 +47,7 @@ Future<void> ParallelFor(TaskScheduler& s, R const& r, F f)
         dep.push_back(&f);
     });
 
-    return s.Add([]{}, &dep[0], static_cast<uint32>(dep.size()));
+    return s.Add([]{}, &dep[0], static_cast<std::uint32_t>(dep.size()));
 }
 
 template<typename IteratorType>
