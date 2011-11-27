@@ -13,6 +13,7 @@
 #include "crunch/concurrency/scheduler.hpp"
 #include "crunch/concurrency/semaphore.hpp"
 #include "crunch/concurrency/thread_local.hpp"
+#include "crunch/concurrency/versioned_data.hpp"
 #include "crunch/concurrency/waitable.hpp"
 #include "crunch/concurrency/work_stealing_queue.hpp"
 
@@ -245,7 +246,7 @@ public:
 
         TaskScheduler& mOwner;
         WorkStealingTaskQueue mTasks;
-        int mConfigurationVersion;
+        std::uint32_t mContextsVersion;
         std::uint32_t const mMaxStealAttemptsBeforeIdle;
         std::uint32_t mStealAttemptCount;
         std::vector<std::shared_ptr<Context>> mNeighbors;
@@ -285,9 +286,13 @@ private:
 
 
     // Contexts cache configuration locally and poll mConfigurationVersion for changes
+    /*
     Detail::SystemMutex mConfigurationMutex;
     volatile int mConfigurationVersion;
     std::vector<std::shared_ptr<Context>> mContexts;
+    */
+    typedef std::vector<std::shared_ptr<Context>> ContextList;
+    VersionedData<ContextList> mContexts;
 
     // Number of idle contexts
     Atomic<std::uint32_t> mIdleCount;

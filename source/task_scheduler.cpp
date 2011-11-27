@@ -15,8 +15,7 @@ CRUNCH_THREAD_LOCAL TaskScheduler::Context* TaskScheduler::tContext = nullptr;
 #endif
 
 TaskScheduler::TaskScheduler()
-    : mConfigurationVersion(0)
-    , mSharedContext(*this)
+    : mSharedContext(*this)
 {}
 
 #if defined (CRUNCH_COMPILER_MSVC)
@@ -27,20 +26,22 @@ void TaskScheduler::Enter()
 {
     CRUNCH_ASSERT_ALWAYS(tContext == nullptr);
     tContext = new Context(*this);
-    Detail::SystemMutex::ScopedLock lock(mConfigurationMutex);
-    mContexts.push_back(std::shared_ptr<Context>(tContext));
-    mConfigurationVersion++;
+
+    mContexts.Update([] (ContextList& contexts)
+    {
+        contexts.push_back(std::shared_ptr<Context>(tContext));
+    });
 }
 
 void TaskScheduler::Leave()
 {
     CRUNCH_ASSERT_ALWAYS(tContext != nullptr);
+    tContext->mNeighbors.clear(); // TODO: move to Context::Cleanup()
+    mContexts.Update([] (ContextList& contexts)
     {
-        Detail::SystemMutex::ScopedLock lock(mConfigurationMutex);
-        tContext->mNeighbors.clear(); // TODO: move to Context::Cleanup()
-        mContexts.erase(std::find_if(mContexts.begin(), mContexts.end(), [] (std::shared_ptr<Context> const& p) { return p.get() == tContext; }));
-        mConfigurationVersion++;
-    }
+        Context* context = tContext;
+        contexts.erase(std::find_if(contexts.begin(), contexts.end(), [context] (std::shared_ptr<Context> const& p) { return p.get() == context; }));
+    });
 
     tContext = nullptr;
 }
@@ -53,7 +54,7 @@ ISchedulerContext& TaskScheduler::GetContext()
 
 TaskScheduler::Context::Context(TaskScheduler& owner)
     : mOwner(owner)
-    , mConfigurationVersion(0)
+    , mContextsVersion(0)
     , mMaxStealAttemptsBeforeIdle(20)
     , mStealAttemptCount(0)
 {}
@@ -86,12 +87,13 @@ ISchedulerContext::State TaskScheduler::Context::Run(IThrottler const& throttler
         // 
 
         // Update neighbor config if it has changed
-        if (mConfigurationVersion != mOwner.mConfigurationVersion)
+
+        mOwner.mContexts.ReadIfDifferent(mContextsVersion, [this] (ContextList const& contexts)
         {
             mNeighbors.clear();
-            Detail::SystemMutex::ScopedLock lock(mOwner.mConfigurationMutex);
-            std::copy_if(mOwner.mContexts.begin(), mOwner.mContexts.end(), std::back_inserter(mNeighbors), [&] (std::shared_ptr<Context> const& p) { return p.get() != this; });
-        }
+            Context* _this = this; // Work around MSVC nested capture bug
+            std::copy_if(contexts.begin(), contexts.end(), std::back_inserter(mNeighbors), [_this] (std::shared_ptr<Context> const& p) { return p.get() != _this; });
+        });
 
         // If nowhere to steal from, return idle
         if (mNeighbors.empty())

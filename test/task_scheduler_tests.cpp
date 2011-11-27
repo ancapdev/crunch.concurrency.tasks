@@ -113,8 +113,8 @@ BOOST_AUTO_TEST_CASE(RemoveMe)
     {
 
 
-    MetaScheduler::Configuration configuration;
-    MetaScheduler metaScheduler(configuration);
+    MetaScheduler::Config config;
+    MetaScheduler metaScheduler(config);
     MetaScheduler::Context& metaSchedulerContext = metaScheduler.AcquireContext();
 
     TaskScheduler scheduler;
@@ -177,8 +177,8 @@ BOOST_AUTO_TEST_CASE(RemoveMe)
 
 BOOST_AUTO_TEST_CASE(RemoveMe2)
 {
-    MetaScheduler::Configuration configuration;
-    MetaScheduler metaScheduler(configuration);
+    MetaScheduler::Config config;
+    MetaScheduler metaScheduler(config);
     MetaScheduler::Context& metaSchedulerContext = metaScheduler.AcquireContext();
     TaskScheduler scheduler;
     // TODO: pass flag to TaskScheduler constructor to say if it should become the global default scheduler
