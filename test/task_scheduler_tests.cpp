@@ -122,12 +122,12 @@ BOOST_AUTO_TEST_CASE(RemoveMe)
 
     struct NullThrottler : IThrottler
     {
+        NullThrottler() {} // Keep GCC happy
+
         virtual bool ShouldYield() const CRUNCH_OVERRIDE
         {
             return false;
         }
-
-
     };
 
     volatile bool done = false;
@@ -212,11 +212,14 @@ BOOST_AUTO_TEST_CASE(RemoveMe2)
 
     struct NullThrottler : IThrottler
     {
+        NullThrottler() {} // Keep GCC happy
+
         virtual bool ShouldYield() const CRUNCH_OVERRIDE
         {
             return false;
         }
     };
+
     NullThrottler const throttler;
     scheduler.GetContext().Run(throttler);
 
