@@ -11,6 +11,8 @@
 #include <boost/test/unit_test_suite.hpp>
 
 #include <iostream>
+#include <tuple>
+#include <vector>
 
 namespace Crunch { namespace Concurrency {
 
@@ -107,19 +109,37 @@ BOOST_AUTO_TEST_SUITE(TaskSchedulerTests)
 
 BOOST_AUTO_TEST_CASE(RemoveMe)
 {
+    for (int i = 0; i < 100; ++i)
+    {
+
+
     MetaScheduler::Configuration configuration;
     MetaScheduler metaScheduler(configuration);
     MetaScheduler::Context& metaSchedulerContext = metaScheduler.AcquireContext();
 
     TaskScheduler scheduler;
-    Event shutdownEvent;
     Event workerDoneEvent;
 
+    struct NullThrottler : IThrottler
+    {
+        virtual bool ShouldYield() const CRUNCH_OVERRIDE
+        {
+            return false;
+        }
+
+
+    };
+
+    volatile bool done = false;
+    NullThrottler const throttler;
+
     Thread t([&] {
+        //*
         scheduler.Enter();
-        scheduler.RunUntil(shutdownEvent);
-        scheduler.Run(); // Orphaning of tasks not implemented, so at this point some tasks may be left.. run to finish all tasks
+        while (!done)
+            scheduler.GetContext().Run(throttler);
         scheduler.Leave();
+        //*/
         workerDoneEvent.Set();
     });
 
@@ -143,13 +163,16 @@ BOOST_AUTO_TEST_CASE(RemoveMe)
         });
         */
     });
-    scheduler.Run();
+
+    scheduler.GetContext().Run(throttler);
+    done = true;
 
     scheduler.Leave();
-    shutdownEvent.Set();
     WaitFor(workerDoneEvent);
 
     metaSchedulerContext.Release();
+
+    }
 }
 
 BOOST_AUTO_TEST_CASE(RemoveMe2)
@@ -187,8 +210,15 @@ BOOST_AUTO_TEST_CASE(RemoveMe2)
     auto e = d >> [] (int x) { std::cout << "Produced " << x << std::endl; };
 
 
-
-    scheduler.Run();
+    struct NullThrottler : IThrottler
+    {
+        virtual bool ShouldYield() const CRUNCH_OVERRIDE
+        {
+            return false;
+        }
+    };
+    NullThrottler const throttler;
+    scheduler.GetContext().Run(throttler);
 
     scheduler.Leave();
     metaSchedulerContext.Release();

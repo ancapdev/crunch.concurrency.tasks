@@ -10,6 +10,8 @@
 #include "crunch/base/override.hpp"
 #include "crunch/base/result_of.hpp"
 #include "crunch/concurrency/future.hpp"
+#include "crunch/concurrency/scheduler.hpp"
+#include "crunch/concurrency/semaphore.hpp"
 #include "crunch/concurrency/thread_local.hpp"
 #include "crunch/concurrency/waitable.hpp"
 #include "crunch/concurrency/work_stealing_queue.hpp"
@@ -184,11 +186,11 @@ class ContinuationImpl : public ScheduledTask
 // TODO: store continuation size hint thread local per F type 
 //       would enable over-allocation on initial task to avoid further allocations for continuations
 //       only necessary when return type is void or Future<T>, i.e., continuable
-class TaskScheduler : NonCopyable
+class TaskScheduler : IScheduler, NonCopyable
 {
 public:
     // TODO: On destruction, orphan tasks
-    class Context : NonCopyable
+    class Context : ISchedulerContext, NonCopyable
     {
     public:
         Context(TaskScheduler& owner);
@@ -233,9 +235,8 @@ public:
             return FutureType(FutureDataPtr(futureData, false));
         }
 
-        void RunAll();
-
-        void RunUntil(IWaitable& waitable);
+        virtual State Run(IThrottler const& throttler) CRUNCH_OVERRIDE;
+        virtual IWaitable& GetHasWorkCondition() CRUNCH_OVERRIDE;
 
     private:
         typedef WorkStealingQueue<ScheduledTaskBase> WorkStealingTaskQueue;
@@ -245,7 +246,11 @@ public:
         TaskScheduler& mOwner;
         WorkStealingTaskQueue mTasks;
         int mConfigurationVersion;
-        std::vector<std::shared_ptr<Context>> mNeighbours;
+        std::uint32_t const mMaxStealAttemptsBeforeIdle;
+        std::uint32_t mStealAttemptCount;
+        std::vector<std::shared_ptr<Context>> mNeighbors;
+
+        std::vector<ScheduledTaskBase*> mRunLog; // Log of tasks run, for debugging
     };
 
     TaskScheduler();
@@ -270,8 +275,8 @@ public:
 
     void Enter();
     void Leave();
-    void Run();
-    void RunUntil(IWaitable& waitable);
+
+    virtual ISchedulerContext& GetContext() CRUNCH_OVERRIDE;
 
 private:
     friend class ScheduledTaskBase;
@@ -283,6 +288,10 @@ private:
     Detail::SystemMutex mConfigurationMutex;
     volatile int mConfigurationVersion;
     std::vector<std::shared_ptr<Context>> mContexts;
+
+    // Number of idle contexts
+    Atomic<std::uint32_t> mIdleCount;
+    Semaphore mWorkAvailable;
 
     // TODO: Need to lock around shared context
     // TODO: Might be better of with a more specialized queue instead of a shared context
