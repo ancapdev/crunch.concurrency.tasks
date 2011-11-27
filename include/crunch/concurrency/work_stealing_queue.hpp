@@ -228,7 +228,7 @@ public:
                 std::int64_t const newSize = newArray->GetSize();
                 mBack.Store(back + newSize, MEMORY_ORDER_SEQ_CST);
                 std::int64_t front = mFront.Load(MEMORY_ORDER_SEQ_CST);
-                if (!mFront.CompareAndSwap(front + newSize, front))
+                if (!mFront.CompareAndSwap(front, front + newSize))
                     mBack.Store(back);
 
                 array->Destroy();
@@ -236,7 +236,7 @@ public:
             return value;
         }
         std::int64_t const newFront = front + 1;
-        if (!mFront.CompareAndSwap(newFront, front))
+        if (!mFront.CompareAndSwap(front, newFront))
             value = nullptr; // steal took last element
         mBack.Store(newFront, MEMORY_ORDER_RELEASE);
         return value;
@@ -261,7 +261,7 @@ public:
                 return nullptr; // Abort
         }
         T* value = array->Get(front);
-        if (!mFront.CompareAndSwap(front + 1, front))
+        if (!mFront.CompareAndSwap(front, front + 1))
             return nullptr; // Abort
 
         return value;
