@@ -207,8 +207,8 @@ public:
         std::int64_t back = mBack.Load(MEMORY_ORDER_ACQUIRE);
         CircularArray* array = mArray.Load(MEMORY_ORDER_ACQUIRE);
         back = back - 1;
-        mBack.Store(back, MEMORY_ORDER_RELEASE);
-        std::int64_t front = mFront.Load(MEMORY_ORDER_ACQUIRE);
+        mBack.Store(back, MEMORY_ORDER_SEQ_CST);
+        std::int64_t front = mFront.Load(MEMORY_ORDER_SEQ_CST);
         std::int64_t const size = back - front;
         if (size < 0)
         {
@@ -235,9 +235,10 @@ public:
             }
             return value;
         }
-        if (!mFront.CompareAndSwap(front + 1, front))
+        std::int64_t const newFront = front + 1;
+        if (!mFront.CompareAndSwap(newFront, front))
             value = nullptr; // steal took last element
-        mBack.Store(front + 1, MEMORY_ORDER_RELEASE);
+        mBack.Store(newFront, MEMORY_ORDER_RELEASE);
         return value;
     }
 
