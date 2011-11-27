@@ -204,15 +204,15 @@ public:
 
     CRUNCH_ALWAYS_INLINE T* Pop()
     {
-        std::int64_t back = mBack.Load(MEMORY_ORDER_ACQUIRE);
-        CircularArray* array = mArray.Load(MEMORY_ORDER_ACQUIRE);
+        std::int64_t back = mBack.Load(MEMORY_ORDER_RELAXED);
+        CircularArray* array = mArray.Load(MEMORY_ORDER_RELAXED);
         back = back - 1;
         mBack.Store(back, MEMORY_ORDER_SEQ_CST);
         std::int64_t front = mFront.Load(MEMORY_ORDER_SEQ_CST);
         std::int64_t const size = back - front;
         if (size < 0)
         {
-            mBack.Store(front, MEMORY_ORDER_RELEASE);
+            mBack.Store(front, MEMORY_ORDER_RELAXED);
             return nullptr; // empty
         }
 
@@ -226,8 +226,8 @@ public:
                 CircularArray* newArray = array->Shrink(front, back);
                 mArray.Store(newArray, MEMORY_ORDER_RELEASE);
                 std::int64_t const newSize = newArray->GetSize();
-                mBack.Store(back + newSize, MEMORY_ORDER_RELEASE);
-                std::int64_t front = mFront.Load(MEMORY_ORDER_ACQUIRE);
+                mBack.Store(back + newSize, MEMORY_ORDER_SEQ_CST);
+                std::int64_t front = mFront.Load(MEMORY_ORDER_SEQ_CST);
                 if (!mFront.CompareAndSwap(front + newSize, front))
                     mBack.Store(back);
 
