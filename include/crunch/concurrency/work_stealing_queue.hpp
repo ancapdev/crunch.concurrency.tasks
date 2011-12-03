@@ -155,14 +155,13 @@ public:
                 mFreeLists[logSize].Push(reinterpret_cast<Node*>(buffer));
             }
 
-            // Support logSize <= 32
-            static std::uint32_t const MaxLogSize = 32;
+            static std::uint32_t const MaxLogSize = sizeof(void*) * 8 - 1;
 
             // Align to cacheline size. 64 should be sufficient on newer x86, but other archs often have larger line sizes
             // Some levels might also use larger lines
             typedef CRUNCH_ALIGN_PREFIX(128) MPMCLifoList<Node> CRUNCH_ALIGN_POSTFIX(128) FreeList;
 
-            FreeList mFreeLists[MaxLogSize];
+            FreeList mFreeLists[MaxLogSize + 3]; // Padded with 2 extra elements to keep MSVC static analyzer happy.
         } CRUNCH_ALIGN_POSTFIX(128);
 
         static Allocator sAllocator;
@@ -227,7 +226,7 @@ public:
                 mArray.Store(newArray, MEMORY_ORDER_RELEASE);
                 std::int64_t const newSize = newArray->GetSize();
                 mBack.Store(back + newSize, MEMORY_ORDER_SEQ_CST);
-                std::int64_t front = mFront.Load(MEMORY_ORDER_SEQ_CST);
+                front = mFront.Load(MEMORY_ORDER_SEQ_CST);
                 if (!mFront.CompareAndSwap(front, front + newSize))
                     mBack.Store(back);
 
