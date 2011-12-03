@@ -124,14 +124,14 @@ BOOST_AUTO_TEST_CASE(RemoveMe)
     {
         NullThrottler() {} // Keep GCC happy
 
-        virtual bool ShouldYield() const CRUNCH_OVERRIDE
+        virtual bool ShouldYield() CRUNCH_OVERRIDE
         {
             return false;
         }
     };
 
     volatile bool done = false;
-    NullThrottler const throttler;
+    NullThrottler throttler;
 
     Thread t([&] {
         //*
@@ -214,13 +214,13 @@ BOOST_AUTO_TEST_CASE(RemoveMe2)
     {
         NullThrottler() {} // Keep GCC happy
 
-        virtual bool ShouldYield() const CRUNCH_OVERRIDE
+        virtual bool ShouldYield() CRUNCH_OVERRIDE
         {
             return false;
         }
     };
 
-    NullThrottler const throttler;
+    NullThrottler throttler;
     scheduler.GetContext().Run(throttler);
 
     scheduler.Leave();

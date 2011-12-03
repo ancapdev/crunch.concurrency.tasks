@@ -236,7 +236,8 @@ public:
             return FutureType(FutureDataPtr(futureData, false));
         }
 
-        virtual State Run(IThrottler const& throttler) CRUNCH_OVERRIDE;
+        virtual bool CanReEnter() CRUNCH_OVERRIDE { return false; }
+        virtual State Run(IThrottler& throttler) CRUNCH_OVERRIDE;
         virtual IWaitable& GetHasWorkCondition() CRUNCH_OVERRIDE;
 
     private:
@@ -278,6 +279,7 @@ public:
     void Leave();
 
     virtual ISchedulerContext& GetContext() CRUNCH_OVERRIDE;
+    virtual bool CanOrphan() CRUNCH_OVERRIDE { return true; }
 
 private:
     friend class ScheduledTaskBase;

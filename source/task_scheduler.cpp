@@ -60,7 +60,7 @@ TaskScheduler::Context::Context(TaskScheduler& owner)
 {}
 
 // TODO: exception safe dispatch (could be a per task flag, with try/catch in task dispatch implementation)
-ISchedulerContext::State TaskScheduler::Context::Run(IThrottler const& throttler)
+ISchedulerContext::State TaskScheduler::Context::Run(IThrottler& throttler)
 {
     for (;;)
     {
