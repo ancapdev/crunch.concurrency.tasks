@@ -144,8 +144,7 @@ public:
 private:
     void Dispatch(ResultClassGeneric)
     {
-        auto result = mFunctor();
-        mFutureData->Set(result);
+        mFutureData->Set(mFunctor());
         Release(mFutureData);
         delete this;
     }
