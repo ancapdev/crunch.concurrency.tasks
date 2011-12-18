@@ -12,6 +12,7 @@
 #include "crunch/concurrency/future.hpp"
 #include "crunch/concurrency/scheduler.hpp"
 #include "crunch/concurrency/semaphore.hpp"
+#include "crunch/concurrency/tasks_api.hpp"
 #include "crunch/concurrency/thread_local.hpp"
 #include "crunch/concurrency/versioned_data.hpp"
 #include "crunch/concurrency/waitable.hpp"
@@ -254,13 +255,14 @@ public:
         std::vector<ScheduledTaskBase*> mRunLog; // Log of tasks run, for debugging
     };
 
-    TaskScheduler();
+    CRUNCH_CONCURRENCY_TASKS_API TaskScheduler();
 
     template<typename F>
     auto Add (F f) -> Future<typename ResultOfTask<F>::Type>
     {
-        if (tContext)
-            return tContext->Add(f);
+        Context* context = GetContextInternal();
+        if (context)
+            return context->Add(f);
         else
             return mSharedContext.Add(f);
     }
@@ -268,23 +270,24 @@ public:
     template<typename F>
     auto Add (F f, IWaitable** dependencies, std::uint32_t dependencyCount) -> Future<typename ResultOfTask<F>::Type>
     {
-        if (tContext)
-            return tContext->Add(f, dependencies, dependencyCount);
+        Context* context = GetContextInternal();
+        if (context)
+            return context->Add(f, dependencies, dependencyCount);
         else
             return mSharedContext.Add(f, dependencies, dependencyCount);
     }
 
-    void Enter();
-    void Leave();
+    CRUNCH_CONCURRENCY_TASKS_API void Enter();
+    CRUNCH_CONCURRENCY_TASKS_API void Leave();
 
-    virtual ISchedulerContext& GetContext() CRUNCH_OVERRIDE;
+    CRUNCH_CONCURRENCY_TASKS_API virtual ISchedulerContext& GetContext() CRUNCH_OVERRIDE;
     virtual bool CanOrphan() CRUNCH_OVERRIDE { return true; }
 
 private:
     friend class ScheduledTaskBase;
 
-    void AddTask(ScheduledTaskBase* task);
-
+    CRUNCH_CONCURRENCY_TASKS_API static Context* GetContextInternal();
+    CRUNCH_CONCURRENCY_TASKS_API void AddTask(ScheduledTaskBase* task);
 
     // Contexts cache configuration locally and poll mConfigurationVersion for changes
     /*
@@ -306,12 +309,20 @@ private:
     static CRUNCH_THREAD_LOCAL Context* tContext;
 };
 
-extern TaskScheduler* gDefaultTaskScheduler;
+CRUNCH_CONCURRENCY_TASKS_API extern TaskScheduler* gDefaultTaskScheduler;
+
+#if !defined (VPM_SHARED_LIBS_BUILD)
+inline TaskScheduler::Context* TaskScheduler::GetContextInternal()
+{
+    return tContext;
+}
+#endif
 
 inline void TaskScheduler::AddTask(ScheduledTaskBase* task)
 {
-    if (tContext && &tContext->mOwner == this)
-        tContext->mTasks.Push(task);
+    Context* context = GetContextInternal();
+    if (context && &context->mOwner == this)
+        context->mTasks.Push(task);
     else
         mSharedContext.mTasks.Push(task);
 }

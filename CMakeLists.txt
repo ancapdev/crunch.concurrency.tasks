@@ -6,6 +6,7 @@ include(configure.cmake)
 vpm_add_library(crunch_concurrency_tasks_lib
   include/crunch/concurrency/task.hpp
   include/crunch/concurrency/task_scheduler.hpp
+  include/crunch/concurrency/tasks_api.hpp
   include/crunch/concurrency/work_stealing_queue.hpp
   source/task.cpp
   source/task_scheduler.cpp)

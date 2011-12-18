@@ -9,6 +9,13 @@ TaskScheduler* gDefaultTaskScheduler = nullptr;
 
 CRUNCH_THREAD_LOCAL TaskScheduler::Context* TaskScheduler::tContext = nullptr;
 
+#if defined (VPM_SHARED_LIBS_BUILD)
+TaskScheduler::Context* TaskScheduler::GetContextInternal()
+{
+    return tContext;
+}
+#endif
+
 #if defined (CRUNCH_COMPILER_MSVC)
 #   pragma warning (push)
 #   pragma warning (disable : 4355) // 'this' used in base member initializer list
