@@ -34,6 +34,7 @@ BOOST_AUTO_TEST_CASE(BasicOperationsTest)
     BOOST_CHECK_EQUAL(queue.Steal(), (int*)0);
 }
 
+#if 0
 BOOST_AUTO_TEST_CASE(StressTest)
 {
     int const logSize = 4;
@@ -87,6 +88,7 @@ BOOST_AUTO_TEST_CASE(StressTest)
 
     BOOST_CHECK_EQUAL(stolen + popped, repeatCount * pushCount);
 }
+#endif
 
 BOOST_AUTO_TEST_SUITE_END()
 

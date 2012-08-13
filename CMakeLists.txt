@@ -4,6 +4,10 @@
 include(configure.cmake)
 
 vpm_add_library(crunch_concurrency_tasks_lib
+  include/crunch/concurrency/index_range.hpp
+  include/crunch/concurrency/iterator_range.hpp
+  include/crunch/concurrency/parallel_for.hpp
+  include/crunch/concurrency/range.hpp
   include/crunch/concurrency/task.hpp
   include/crunch/concurrency/task_scheduler.hpp
   include/crunch/concurrency/tasks_api.hpp
@@ -19,6 +23,7 @@ if(NOT CRUNCH_NO_TESTS)
   vpm_depend(crunch.test)
 
   add_executable(crunch_concurrency_tasks_test
+    test/parallel_for_tests.cpp
     test/task_scheduler_tests.cpp
     test/work_stealing_queue_tests.cpp)
 
