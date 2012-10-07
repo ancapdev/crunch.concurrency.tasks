@@ -8,7 +8,6 @@
 #include "crunch/base/noncopyable.hpp"
 #include "crunch/base/novtable.hpp"
 #include "crunch/base/override.hpp"
-#include "crunch/base/result_of.hpp"
 #include "crunch/concurrency/future.hpp"
 #include "crunch/concurrency/scheduler.hpp"
 #include "crunch/concurrency/semaphore.hpp"
@@ -17,7 +16,9 @@
 #include "crunch/concurrency/versioned_data.hpp"
 #include "crunch/concurrency/waitable.hpp"
 #include "crunch/concurrency/work_stealing_queue.hpp"
-
+#include "crunch/concurrency/detail/task_result.hpp"
+#include "crunch/concurrency/detail/scheduled_task.hpp"
+#include "crunch/concurrency/detail/scheduled_task_execution_context.hpp"
 
 // TODO: remove
 #include "crunch/concurrency/detail/system_mutex.hpp"
@@ -30,159 +31,6 @@
 #include <type_traits>
 
 namespace Crunch { namespace Concurrency {
-
-namespace Detail
-{
-    template<typename ResultType>
-    struct ResultOfTask_
-    {
-        typedef ResultType Type;
-    };
-
-    template<typename T>
-    struct ResultOfTask_<Future<T>>
-    {
-        typedef T Type;
-    };
-}
-
-template<typename F>
-struct ResultOfTask
-{
-    typedef typename Detail::ResultOfTask_<typename ResultOf<F>::Type>::Type Type;
-};
-
-/*
-template<typename F, typename A0 = void, typename A1 = void>
-struct ResultOfTask
-{
-    static F f;
-    typedef typename Detail::ResultOfTask_<decltype(f(*(A0*)0, *(A1*)0))>::Type Type;
-};
-
-template<typename F, typename A0>
-struct ResultOfTask<F, A0, void>
-{
-    static F f;
-    typedef typename Detail::ResultOfTask_<decltype(f(*(A0*)0))>::Type Type;
-};
-
-template<typename F>
-struct ResultOfTask<F, void, void>
-{
-    static F f;
-    typedef typename Detail::ResultOfTask_<decltype(f())>::Type Type;
-};
-*/
-
-class TaskScheduler;
-
-class CRUNCH_NOVTABLE ScheduledTaskBase : NonCopyable
-{
-// protected: Some weirdness with access levels through lambdas on MSVC
-public:
-    friend class TaskScheduler;
-
-    ScheduledTaskBase(TaskScheduler& owner, std::uint32_t barrierCount, std::uint32_t allocationSize)
-        : mOwner(owner)
-        , mBarrierCount(barrierCount, MEMORY_ORDER_RELEASE)
-        , mAllocationSize(allocationSize)
-    {}
-
-    virtual void Dispatch() = 0;
-
-    void NotifyDependencyReady();
-
-    TaskScheduler& mOwner;
-    Atomic<std::uint32_t> mBarrierCount;
-    std::uint32_t mAllocationSize;
-};
-
-struct ResultClassVoid {};
-struct ResultClassGeneric {};
-struct ResultClassFuture {};
-
-template<typename ResultType, typename ReturnType>
-struct ResultClass
-{
-    typedef ResultClassGeneric Type;
-};
-
-template<>
-struct ResultClass<void, void>
-{
-    typedef ResultClassVoid Type;
-};
-
-template<typename R>
-struct ResultClass<R, Future<R>>
-{
-    typedef ResultClassFuture Type;
-};
-
-template<typename F>
-class ScheduledTask : public ScheduledTaskBase
-{
-public:
-    typedef typename ResultOf<F>::Type ReturnType;
-    typedef typename ResultOfTask<F>::Type ResultType;
-    typedef Future<ResultType> FutureType;
-    typedef typename FutureType::DataType FutureDataType;
-    typedef typename FutureType::DataPtr FutureDataPtr;
-
-    // futureData must have 1 ref count already added
-    ScheduledTask(TaskScheduler& owner, F&& f, FutureDataType* futureData, std::uint32_t barrierCount, std::uint32_t allocationSize = sizeof(ScheduledTask<F>))
-        : ScheduledTaskBase(owner, barrierCount, allocationSize)
-        , mFutureData(futureData) 
-        , mFunctor(std::move(f))
-    {}
-
-    virtual void Dispatch() CRUNCH_OVERRIDE
-    {
-        Dispatch(typename ResultClass<ResultType, ReturnType>::Type());
-    }
-
-private:
-    void Dispatch(ResultClassGeneric)
-    {
-        mFutureData->Set(mFunctor());
-        Release(mFutureData);
-        delete this;
-    }
-
-    void Dispatch(ResultClassVoid)
-    {
-        mFunctor();
-        mFutureData->Set();
-        Release(mFutureData);
-        delete this;
-    }
-
-    void Dispatch(ResultClassFuture);
-
-    // typedef typename std::aligned_storage<sizeof(F), std::alignment_of<F>::value>::type FunctorStorageType;
-
-    FutureDataType* mFutureData;
-    F mFunctor;
-    // FunctorStorageType mFunctorStorage;
-};
-
-/*
-// For use when the continuation doesn't fit in the original ScheduledTasks allocation
-template<typename F, typename R>
-class ContinuationImpl : public ScheduledTask
-{
-    static void Dispatch(ScheduledTask* ScheduledTask)
-    {
-        // Must delete the ScheduledTask because it's not part of the FutureData allocation
-    }
-
-    typedef typename std::aligned_storage<sizeof(F), std::alignment_of<F>::value>::type FunctorStorageType;
-
-    Detail::FutureData<R>* mFutureData;
-    FunctorStorageType mFunctorStorage;
-};
-*/
 
 // TODO: store continuation size hint thread local per F type 
 //       would enable over-allocation on initial task to avoid further allocations for continuations
@@ -197,51 +45,44 @@ public:
         Context(TaskScheduler& owner);
 
         template<typename F>
-        auto Add (F f) -> Future<typename ResultOfTask<F>::Type>
+        auto Add (F f) -> Future<typename Detail::ResultOfTask<F>::Type>
         {
             return Add(f, nullptr, 0);
         }
 
         template<typename F>
-        auto Add (F f, IWaitable** dependencies, std::uint32_t dependencyCount) -> Future<typename ResultOfTask<F>::Type>
+        auto Add (F f, IWaitable** dependencies, std::uint32_t dependencyCount) -> Future<typename Detail::ResultOfTask<F>::Type>
         {
-            typedef Future<typename ResultOfTask<F>::Type> FutureType;
+            typedef Future<typename Detail::ResultOfTask<F>::Type> FutureType;
             typedef typename FutureType::DataType FutureDataType;
             typedef typename FutureType::DataPtr FutureDataPtr;
 
             FutureDataType* futureData = new FutureDataType(2);
-            ScheduledTask<F>* task = new ScheduledTask<F>(mOwner, std::move(f), futureData, dependencyCount);
+            Detail::ScheduledTask<F>* task = new Detail::ScheduledTask<F>(mOwner, std::move(f), futureData, dependencyCount);
 
-            if (dependencyCount > 0)
-            {
-                std::uint32_t addedCount = 0;
-                for (std::uint32_t i = 0; i < dependencyCount; ++i)
-                    if (dependencies[i]->AddWaiter([=] { task->NotifyDependencyReady(); }))
-                        addedCount++;
+            std::uint32_t addedCount = 0;
+            for (std::uint32_t i = 0; i < dependencyCount; ++i)
+                if (dependencies[i]->AddWaiter([=] { task->NotifyDependencyReady(); }))
+                    addedCount++;
 
-                if (addedCount < dependencyCount)
-                {
-                    if (addedCount == 0)
-                        mTasks.Push(task);
-                    else
-                        if (task->mBarrierCount.Sub(dependencyCount - addedCount) == 1)
-                            mTasks.Push(task);
-                }
-            }
-            else
+            const std::uint32_t readyCount = dependencyCount - addedCount;
+
+            if (addedCount == 0 ||
+                (readyCount > 0 && (task->mBarrierCount.Sub(readyCount) == readyCount)))
             {
                 mTasks.Push(task);
             }
-
+            
             return FutureType(FutureDataPtr(futureData, false));
         }
+
 
         virtual bool CanReEnter() CRUNCH_OVERRIDE { return false; }
         virtual State Run(IThrottler& throttler) CRUNCH_OVERRIDE;
         virtual IWaitable& GetHasWorkCondition() CRUNCH_OVERRIDE;
 
     private:
-        typedef WorkStealingQueue<ScheduledTaskBase> WorkStealingTaskQueue;
+        typedef WorkStealingQueue<Detail::ScheduledTaskBase> WorkStealingTaskQueue;
 
         friend class TaskScheduler;
 
@@ -252,13 +93,13 @@ public:
         std::uint32_t mStealAttemptCount;
         std::vector<std::shared_ptr<Context>> mNeighbors;
 
-        std::vector<ScheduledTaskBase*> mRunLog; // Log of tasks run, for debugging
+        std::vector<Detail::ScheduledTaskBase*> mRunLog; // Log of tasks run, for debugging
     };
 
     CRUNCH_CONCURRENCY_TASKS_API TaskScheduler();
 
     template<typename F>
-    auto Add (F f) -> Future<typename ResultOfTask<F>::Type>
+    auto Add(F f) -> Future<typename Detail::ResultOfTask<F>::Type>
     {
         Context* context = GetContextInternal();
         if (context)
@@ -268,7 +109,7 @@ public:
     }
 
     template<typename F>
-    auto Add (F f, IWaitable** dependencies, std::uint32_t dependencyCount) -> Future<typename ResultOfTask<F>::Type>
+    auto Add(F f, IWaitable** dependencies, std::uint32_t dependencyCount) -> Future<typename Detail::ResultOfTask<F>::Type>
     {
         Context* context = GetContextInternal();
         if (context)
@@ -284,10 +125,10 @@ public:
     virtual bool CanOrphan() CRUNCH_OVERRIDE { return true; }
 
 private:
-    friend class ScheduledTaskBase;
+    friend class Detail::ScheduledTaskBase;
 
     CRUNCH_CONCURRENCY_TASKS_API static Context* GetContextInternal();
-    CRUNCH_CONCURRENCY_TASKS_API void AddTask(ScheduledTaskBase* task);
+    CRUNCH_CONCURRENCY_TASKS_API void AddTask(Detail::ScheduledTaskBase* task);
 
     // Contexts cache configuration locally and poll mConfigurationVersion for changes
     /*
@@ -318,52 +159,13 @@ inline TaskScheduler::Context* TaskScheduler::GetContextInternal()
 }
 #endif
 
-inline void TaskScheduler::AddTask(ScheduledTaskBase* task)
+inline void TaskScheduler::AddTask(Detail::ScheduledTaskBase* task)
 {
     Context* context = GetContextInternal();
     if (context && &context->mOwner == this)
         context->mTasks.Push(task);
     else
         mSharedContext.mTasks.Push(task);
-}
-
-inline void ScheduledTaskBase::NotifyDependencyReady()
-{
-    if (1 == mBarrierCount.Decrement())
-        mOwner.AddTask(this);
-}
-
-template<typename F>
-void ScheduledTask<F>::Dispatch(ResultClassFuture)
-{
-    auto result = mFunctor();
-
-    // Create continuation dependent on the completion of the returned Future
-    auto futureData = mFutureData;
-    std::uint32_t const allocSize = mAllocationSize;
-    TaskScheduler& owner = mOwner;
-
-    // Get value from result
-    auto contFunc = [=] () -> ResultType { return result.Get(); };
-    typedef ScheduledTask<decltype(contFunc)> ContTaskType;
-
-    ContTaskType* contTask;
-    // TODO: statically guarantee sufficient space for continuation in any task returning a Future<T>
-    if (sizeof(ScheduledTask<F>) >= sizeof(ContTaskType) || allocSize >= sizeof(ContTaskType))
-    {
-        // Reuse current allocation
-        this->~ScheduledTask<F>();
-        contTask = new (this) ContTaskType(owner, std::move(contFunc), futureData, 1, allocSize);
-    }
-    else
-    {
-        // Create new allocation
-        delete this;
-        contTask = new ContTaskType(owner, std::move(contFunc), futureData, 1);
-    }
-
-    if (!result.AddWaiter([=] { contTask->NotifyDependencyReady(); }))
-        contTask->NotifyDependencyReady();
 }
 
 }}

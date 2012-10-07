@@ -1,0 +1,5 @@
+add_executable(crunch_concurrency_tasks_fib
+  main.cpp)
+
+target_link_libraries(crunch_concurrency_tasks_fib
+  crunch_concurrency_tasks_lib)

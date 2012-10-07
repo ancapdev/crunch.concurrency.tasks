@@ -79,7 +79,7 @@ ISchedulerContext::State TaskScheduler::Context::Run(IThrottler& throttler)
                 if (throttler.ShouldYield())
                     return State::Working;
 
-                if (ScheduledTaskBase* task = mTasks.Pop())
+                if (Detail::ScheduledTaskBase* task = mTasks.Pop())
                 {
                     task->Dispatch();
                     mRunLog.push_back(task);
@@ -110,7 +110,7 @@ ISchedulerContext::State TaskScheduler::Context::Run(IThrottler& throttler)
         // TODO: fast random number generator
         // TODO: steal local first
         int stealIndex = rand() % mNeighbors.size();
-        if (ScheduledTaskBase* task = mNeighbors[stealIndex]->mTasks.Steal())
+        if (Detail::ScheduledTaskBase* task = mNeighbors[stealIndex]->mTasks.Steal())
         {
             mStealAttemptCount = 0;
             task->Dispatch();

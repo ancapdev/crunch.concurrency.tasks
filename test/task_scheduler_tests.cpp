@@ -20,6 +20,72 @@ namespace Crunch { namespace Concurrency {
 
 BOOST_AUTO_TEST_SUITE(TaskSchedulerTests)
 
+BOOST_AUTO_TEST_CASE(ContinuationTest)
+{
+    MetaScheduler::Config config;
+    MetaScheduler metaScheduler(config);
+    MetaScheduler::Context& metaSchedulerContext = metaScheduler.AcquireContext();
+    TaskScheduler scheduler;
+    // TODO: pass flag to TaskScheduler constructor to say if it should become the global default scheduler
+    gDefaultTaskScheduler = &scheduler;
+    scheduler.Enter();
+
+    NullThrottler throttler;
+
+    volatile bool done = false;
+
+    Thread t([&] {
+        scheduler.Enter();
+        while (!done)
+            scheduler.GetContext().Run(throttler);
+        scheduler.Leave();
+    });
+
+    Future<int> f = scheduler.Add([&] () -> Future<int> {
+        std::cout << "initial" << std::endl;
+
+        auto child1 = scheduler.Add([] () -> int { std::cout << "child1" << std::endl; return 1; });
+        auto child2 = scheduler.Add([] () -> int { std::cout << "child2" << std::endl; return 2; });
+
+        IWaitable* deps[2] = { &child1, &child2 };
+
+        return scheduler.Add([=] () -> int {
+            std::cout << "continuation " << child1.Get() << ", " << child2.Get() << std::endl;
+            return child1.Get() + child2.Get();
+        }, deps, 2);
+    });
+
+    WaitFor(f);
+    std::cout << "Result: " << f.Get() << std::endl;
+
+    auto f2 = scheduler.Add([&] (TaskExecutionContext<int>& context) -> Future<int> {
+        std::cout << "In added" << std::endl;
+        
+        return context.ExtendWith([] () -> int {
+            std::cout << "In continuation" << std::endl;
+            return 123;
+        });
+    });
+    WaitFor(f2);
+    std::cout << "Result: " << f2.Get() << std::endl;
+
+
+    auto f3 = scheduler.Add([&] (TaskExecutionContext<void>& context) {
+        std::cout << "In added 2" << std::endl;
+        
+        context.ExtendWith([] () {
+            std::cout << "In continuation 2" << std::endl;
+        });
+    });
+    WaitFor(f3);
+
+    done = true;
+    t.Join();
+
+    scheduler.Leave();
+    metaSchedulerContext.Release();
+}
+
 #if 0
 BOOST_AUTO_TEST_CASE(RemoveMe)
 {

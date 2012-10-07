@@ -31,12 +31,12 @@ public:
     }
 
     template<typename F>
-    auto Then(F f) -> Task<typename ResultOfTask<F(ResultType)>::Type>
+    auto Then(F f) -> Task<typename Detail::ResultOfTask<F(ResultType)>::Type>
     {
         IWaitable* dep = &mFuture;
         Future<ResultType> result = mFuture;
-        Future<typename ResultOfTask<F(ResultType)>::Type> thenFuture = mScheduler->Add([=]{ return f(result.Get()); }, &dep, 1);
-        return Task<typename ResultOfTask<F(ResultType)>::Type>(mScheduler, thenFuture);
+        Future<typename Detail::ResultOfTask<F(ResultType)>::Type> thenFuture = mScheduler->Add([=]{ return f(result.Get()); }, &dep, 1);
+        return Task<typename Detail::ResultOfTask<F(ResultType)>::Type>(mScheduler, thenFuture);
     }
 
 private:
@@ -65,10 +65,10 @@ public:
     }
 
     template<typename F>
-    auto Then(F f) -> Task<typename ResultOfTask<F>::Type>
+    auto Then(F f) -> Task<typename Detail::ResultOfTask<F>::Type>
     {
         IWaitable* dep = &mFuture;
-        return Task<typename ResultOfTask<F>::Type>(mScheduler, mScheduler->Add(f, &dep, 1));
+        return Task<typename Detail::ResultOfTask<F>::Type>(mScheduler, mScheduler->Add(f, &dep, 1));
     }
 
 private:
@@ -77,9 +77,9 @@ private:
 };
 
 template<typename F>
-auto RunTask(F f) -> Task<typename ResultOfTask<F>::Type>
+auto RunTask(F f) -> Task<typename Detail::ResultOfTask<F>::Type>
 {
-    return Task<typename ResultOfTask<F>::Type>(f);
+    return Task<typename Detail::ResultOfTask<F>::Type>(f);
 }
 
 template<typename R, typename F>

@@ -1,0 +1,83 @@
+// Copyright (c) 2012, Christian Rorvik
+// Distributed under the Simplified BSD License (See accompanying file LICENSE.txt)
+
+#include "crunch/concurrency/meta_scheduler.hpp"
+#include "crunch/concurrency/task_scheduler.hpp"
+
+namespace Crunch { namespace Concurrency {
+
+int Fib(int x)
+{
+    if (x <= 2)
+        return x;
+    else
+        return Fib(x - 1) + Fib(x - 2);
+}
+
+Future<int> ParFib(int x)
+{
+    if (x < 5)
+    {
+        return gDefaultTaskScheduler->Add([=] () -> int { Fib(x); });
+    }
+    else
+    {
+        Future<int> c1 = gDefaultTaskScheduler->Add([=] () -> Future<int> { return ParFib(x - 1); });
+        Future<int> c2 = gDefaultTaskScheduler->Add([=] () -> Future<int> { return ParFib(x - 2); });
+        IWaitable* deps[] = { &c1, &c2 };
+        return gDefaultTaskScheduler->Add(
+            [=] () -> int { return c1.Get() + c2.Get(); },
+            deps, 2);
+    }
+}
+
+void FibSample()
+{
+    MetaScheduler::Config config;
+    MetaScheduler metaScheduler(config);
+    MetaScheduler::Context& metaSchedulerContext = metaScheduler.AcquireContext();
+    TaskScheduler scheduler;
+    // TODO: pass flag to TaskScheduler constructor to say if it should become the global default scheduler
+    gDefaultTaskScheduler = &scheduler;
+    scheduler.Enter();
+
+    NullThrottler throttler;
+
+    volatile bool done = false;
+
+    Thread t1([&] {
+        scheduler.Enter();
+        while (!done)
+            scheduler.GetContext().Run(throttler);
+        scheduler.Leave();
+    });
+
+    Thread t2([&] {
+        scheduler.Enter();
+        while (!done)
+            scheduler.GetContext().Run(throttler);
+        scheduler.Leave();
+    });
+
+    int x = 20;
+    Future<int> y = ParFib(x);
+    WaitFor(y);
+    std::cout << "ParFib(" << x << ") = " << y.Get() << std::endl;
+    std::cout << "Fib(" << x << ") = " << Fib(x) << std::endl;
+
+
+    done = true;
+    t1.Join();
+    t2.Join();
+
+    scheduler.Leave();
+    metaSchedulerContext.Release();
+}
+
+}}
+
+int main()
+{
+    Crunch::Concurrency::FibSample();
+    return 0;
+}

@@ -9,9 +9,14 @@ vpm_add_library(crunch_concurrency_tasks_lib
   include/crunch/concurrency/parallel_for.hpp
   include/crunch/concurrency/range.hpp
   include/crunch/concurrency/task.hpp
+  include/crunch/concurrency/task_execution_context.hpp
   include/crunch/concurrency/task_scheduler.hpp
   include/crunch/concurrency/tasks_api.hpp
   include/crunch/concurrency/work_stealing_queue.hpp
+  include/crunch/concurrency/detail/scheduled_task.hpp
+  include/crunch/concurrency/detail/scheduled_task_execution_context.hpp
+  include/crunch/concurrency/detail/task_result.hpp
+  source/scheduled_task.cpp
   source/task.cpp
   source/task_scheduler.cpp)
 
@@ -47,3 +52,5 @@ if(NOT CRUNCH_NO_BENCHMARKS)
 
   crunch_add_benchmark(crunch_concurrency_tasks_benchmark)
 endif()
+
+add_subdirectory(samples/fib)
