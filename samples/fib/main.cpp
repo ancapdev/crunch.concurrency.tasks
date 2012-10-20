@@ -19,7 +19,7 @@ Future<int> ParFib(int x)
 {
     if (x < 5)
     {
-        return gDefaultTaskScheduler->Add([=] () -> int { Fib(x); });
+        return gDefaultTaskScheduler->Add([=] () -> int { return Fib(x); });
     }
     else
     {
@@ -64,7 +64,7 @@ Future<int> ParFib2(int x)
 {
     if (x < 5)
     {
-        return gDefaultTaskScheduler->Add([=] () -> int { Fib(x); });
+        return gDefaultTaskScheduler->Add([=] () -> int { return Fib(x); });
     }
     else
     {
