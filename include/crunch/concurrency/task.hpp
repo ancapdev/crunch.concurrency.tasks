@@ -44,6 +44,22 @@ private:
     Future<ResultType> mFuture;
 };
 
+/*
+template<typename T0, typename T1, typename F>
+auto Join(
+    const Task<T0>& t0,
+    const Task<T1>& t1,
+    F f,
+    TaskScheduler& scheduler = *gDefaultTaskScheduler) -> Task<typename ResultOf<F(T0, T1)>::Type>
+{
+    auto f0 = t0.GetFuture();
+    auto f1 = t1.GetFuture();
+    IWaitable* deps[2] = { &f0, &f1 };
+    auto joinedFuture = scheduler.Add([=] { return f(f0.Get(), f1.Get()); }, &deps, 2);
+    return Task<typename Detail::ResultOfTask<F(T0, T1)>::Type>(&scheduler, joinedFuture);
+}
+*/
+
 template<>
 class Task<void>
 {
