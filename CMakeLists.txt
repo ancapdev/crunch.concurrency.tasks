@@ -1,4 +1,4 @@
-# Copyright (c) 2011, Christian Rorvik
+# Copyright (c) 2011-2013, Christian Rorvik
 # Distributed under the Simplified BSD License (See accompanying file LICENSE.txt)
 
 include(configure.cmake)
@@ -26,7 +26,7 @@ target_link_libraries(crunch_concurrency_tasks_lib
   crunch_concurrency_lib)
 
 if(NOT CRUNCH_NO_TESTS)
-  vpm_set_default_version(crunch.test trunk)
+  vpm_set_default_version(crunch.test master)
   vpm_depend(crunch.test)
 
   add_executable(crunch_concurrency_tasks_test
@@ -42,7 +42,7 @@ if(NOT CRUNCH_NO_TESTS)
 endif()
 
 if(NOT CRUNCH_NO_BENCHMARKS)
-  vpm_set_default_version(crunch.benchmarking trunk)
+  vpm_set_default_version(crunch.benchmarking master)
   vpm_depend(crunch.benchmarking)
 
   add_executable(crunch_concurrency_tasks_benchmark

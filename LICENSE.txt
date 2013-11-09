@@ -1,4 +1,4 @@
-Copyright (c) 2011, Christian Rorvik
+Copyright (c) 2011-2013, Christian Rorvik
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
